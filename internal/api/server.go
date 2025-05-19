@@ -1,0 +1,152 @@
+package api
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"time"
+
+	"github.com/its-saeed/distributed-cache/internal/cache"
+)
+
+// Server represents the HTTP API server
+type Server struct {
+	cacheManager *cache.Manager
+	httpServer   *http.Server
+	shutdown     chan struct{}
+}
+
+// NewServer initializes a new API server
+func NewServer(addr string, cacheManager *cache.Manager) *Server {
+	s := &Server{
+		cacheManager: cacheManager,
+		shutdown:     make(chan struct{}),
+	}
+
+	// Define HTTP routes
+	router := http.NewServeMux()
+	router.HandleFunc("/", s.handleRoot)
+	router.HandleFunc("/get", s.handleGet)
+	router.HandleFunc("/set", s.handleSet)
+
+	// Configure the HTTP server
+	s.httpServer = &http.Server{
+		Addr:         addr,
+		Handler:      router,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  15 * time.Second,
+	}
+
+	return s
+}
+
+// Start runs the HTTP server
+func (s *Server) Start() error {
+	go s.gracefulShutdown()
+	return s.httpServer.ListenAndServe()
+}
+
+// Stop initiates a graceful shutdown
+func (s *Server) Stop() {
+	close(s.shutdown)
+}
+
+// gracefulShutdown handles clean server termination
+func (s *Server) gracefulShutdown() {
+	<-s.shutdown
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	s.httpServer.Shutdown(ctx)
+}
+
+// handleRoot serves the root endpoint
+func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		writeError(w, http.StatusNotFound, "Endpoint not found")
+		return
+	}
+	writeResponse(w, http.StatusOK, map[string]string{
+		"message": "Distributed Cache API",
+		"version": "1.0",
+	})
+}
+
+// handleGet handles cache retrieval
+func (s *Server) handleGet(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	key := r.URL.Query().Get("key")
+	if key == "" {
+		writeError(w, http.StatusBadRequest, "Missing 'key' parameter")
+		return
+	}
+
+	node, err := s.cacheManager.GetNodeForKey(key)
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+
+	value, found := s.cacheManager.GetKeyFromNode(node.String(), key)
+	if !found {
+		writeError(w, http.StatusNotFound, "Key not found")
+		return
+	}
+
+	writeResponse(w, http.StatusOK, map[string]interface{}{
+		"key":   key,
+		"value": string(value),
+		"node":  node.String(),
+	})
+}
+
+// handleSet handles key-value storage
+func (s *Server) handleSet(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	key := r.URL.Query().Get("key")
+	value := r.URL.Query().Get("value")
+	if key == "" || value == "" {
+		writeError(w, http.StatusBadRequest, "Both 'key' and 'value' parameters are required")
+		return
+	}
+
+	node, err := s.cacheManager.GetNodeForKey(key)
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+
+	err = s.cacheManager.SetKeyOnNode(node.String(), key, []byte(value))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeResponse(w, http.StatusCreated, map[string]interface{}{
+		"message": "Value set successfully",
+		"key":     key,
+		"node":    node.String(),
+	})
+}
+
+// writeError sends an error response
+func writeError(w http.ResponseWriter, statusCode int, message string) {
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(map[string]string{"error": message})
+}
+
+// writeResponse sends a success response
+func writeResponse(w http.ResponseWriter, statusCode int, data interface{}) {
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(data)
+}
