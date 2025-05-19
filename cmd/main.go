@@ -14,12 +14,13 @@ import (
 func main() {
 	debugMode := flag.Bool("debug", false, "Enable debug mode")
 	cacheSize := flag.Int("cache-size", 1000, "Cache size")
+	port := flag.String("port", "8080", "API server port")
 	flag.Parse()
 
 	pubsub := communication.NewPubSub(*debugMode)
 	manager := cache.NewCacheManager(pubsub)
 
-	apiServer := api.NewServer(":8080", manager)
+	apiServer := api.NewServer(":"+*port, manager)
 	log.Println("Starting API server on :8080")
 
 	node1 := node.NewDataNode("node-1", *cacheSize, pubsub)
