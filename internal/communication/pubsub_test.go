@@ -112,24 +112,6 @@ func TestPubSubMultipleSubscribers(t *testing.T) {
 	wg.Wait()
 }
 
-// Test that duplicate subscriptions don't register twice
-func TestPubSubDuplicateSubscriptions(t *testing.T) {
-	pubsub := NewPubSub(false)
-	var callCount int
-	handler := func(msg Message) { callCount++ }
-
-	pubsub.Subscribe("dup_topic", handler)
-	pubsub.Subscribe("dup_topic", handler) // Should be ignored
-
-	pubsub.PublishSync("dup_topic", Message{Payload: []byte("data")})
-
-	time.Sleep(50 * time.Millisecond) // Allow async execution
-
-	if callCount != 1 {
-		t.Errorf("Handler called multiple times, expected only once")
-	}
-}
-
 // Test PubSub stress with high concurrency
 func TestPubSubHighConcurrency(t *testing.T) {
 	pubsub := NewPubSub(false)

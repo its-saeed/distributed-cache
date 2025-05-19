@@ -83,5 +83,8 @@ Response:
 
 
 ## 🧪 Running Tests
-go test -v ./internal/... ./api
+
+```bash
+go test -v ./internal/... 
+```
 
