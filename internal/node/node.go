@@ -16,6 +16,8 @@ type DataNode struct {
 	logger   *log.Logger
 	shutdown chan struct{}
 	wg       sync.WaitGroup
+	persist  bool
+	dataFile string
 }
 
 func NewDataNode(id string, capacity int, pubsub *communication.PubSub) *DataNode {
@@ -24,9 +26,12 @@ func NewDataNode(id string, capacity int, pubsub *communication.PubSub) *DataNod
 		pubsub:   pubsub,
 		logger:   log.New(log.Writer(), "NODE["+id+"] ", log.LstdFlags),
 		shutdown: make(chan struct{}),
+		persist:  persist,
+		dataFile: dataFile,
 	}
 
 	dn.cache = cache.NewLRUCache(capacity)
+	dn.LoadFromDisc()
 
 	dn.registerHandlers()
 
@@ -43,6 +48,7 @@ func (dn *DataNode) Run() {
 func (dn *DataNode) registerHandlers() {
 	dn.pubsub.Subscribe("get_"+dn.ID, dn.handleGetRequest)
 	dn.pubsub.Subscribe("set_"+dn.ID, dn.handleSetRequest)
+	dn.pubsub.Subscribe("del_"+dn.ID, dn.handleDeleteRequest)
 }
 
 func (dn *DataNode) handleGetRequest(msg communication.Message) {
@@ -132,7 +138,28 @@ func (dn *DataNode) handleDeleteRequest(msg communication.Message) {
 }
 
 func (dn *DataNode) Shutdown() {
+	dn.SaveToDisk()
 	close(dn.shutdown)
 	dn.wg.Wait()
 	dn.logger.Println("Shutdown complete")
+}
+
+func (dn *DataNode) SaveToDisk() {
+	if !dn.persist {
+		return
+	}
+
+	if err := dn.cache.SaveToFile(dn.dataFile); err != nil {
+		dn.logger.Println("Failed to persist")
+	}
+}
+
+func (dn *DataNode) LoadFromDisc() {
+	if !dn.persist {
+		return
+	}
+
+	if err := dn.cache.LoadFromFile(dn.dataFile); err != nil {
+		dn.logger.Println("Failed to persist")
+	}
 }

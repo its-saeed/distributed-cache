@@ -36,7 +36,7 @@ func TestSetKeyEndpoint(t *testing.T) {
 
 	// Simulate node registration
 	cacheSize := 1000
-	node1 := node.NewDataNode("node-1", cacheSize, pubsub)
+	node1 := node.NewDataNode("node-1", cacheSize, pubsub, false, "")
 	node1.Run()
 
 	req := httptest.NewRequest(http.MethodPost, "/set?key=testKey&value=testValue", nil)
@@ -54,7 +54,7 @@ func TestGetKeyEndpoint(t *testing.T) {
 	// Simulate node registration
 	cacheSize := 1000
 	nodeAddr := "node-1"
-	node1 := node.NewDataNode(nodeAddr, cacheSize, pubsub)
+	node1 := node.NewDataNode(nodeAddr, cacheSize, pubsub, false, "")
 	node1.Run()
 
 	// Set a key manually
@@ -82,7 +82,7 @@ func TestGetNonExistentKey(t *testing.T) {
 	// Simulate node registration
 	cacheSize := 1000
 	nodeAddr := "node-1"
-	node1 := node.NewDataNode(nodeAddr, cacheSize, pubsub)
+	node1 := node.NewDataNode(nodeAddr, cacheSize, pubsub, false, "")
 	node1.Run()
 
 	req := httptest.NewRequest(http.MethodGet, "/get?key=missingKey", nil)

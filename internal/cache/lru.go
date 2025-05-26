@@ -2,6 +2,8 @@ package cache
 
 import (
 	"container/list"
+	"encoding/json"
+	"os"
 	"sync"
 )
 
@@ -103,4 +105,54 @@ func (l *LRUCache) Len() int {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	return l.list.Len()
+}
+
+type PersistedCache struct {
+	Capacity int
+	Entries  []Entry // ordered front (MRU) to back (LRU)
+}
+
+func (l *LRUCache) SaveToFile(filename string) error {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
+	var entries []Entry
+	for elem := l.list.Front(); elem != nil; elem = elem.Next() {
+		entry := elem.Value.(*Entry)
+		entries = append(entries, *entry)
+	}
+
+	persist := PersistedCache{
+		Capacity: l.capacity,
+		Entries:  entries,
+	}
+
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	return encoder.Encode(persist)
+}
+
+func (l *LRUCache) LoadFromFile(filename string) error {
+	file, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	var persist PersistedCache
+	decoder := json.NewDecoder(file)
+	if err := decoder.Decode(&persist); err != nil {
+		return err
+	}
+
+	for i := len(persist.Entries) - 1; i >= 0; i-- {
+		e := persist.Entries[i]
+		l.Set(e.Key, e.Value)
+	}
+	return nil
 }

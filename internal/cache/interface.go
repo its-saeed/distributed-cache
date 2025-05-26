@@ -5,4 +5,6 @@ type Cache interface {
 	Set(key string, value []byte)
 	Delete(key string)
 	Len() int
+	SaveToFile(filename string) error
+	LoadFromFile(filename string) error
 }
