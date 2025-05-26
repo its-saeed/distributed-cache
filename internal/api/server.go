@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -28,6 +29,7 @@ func NewServer(addr string, cacheManager *cache.Manager) *Server {
 	router.HandleFunc("/", s.handleRoot)
 	router.HandleFunc("/get", s.handleGet)
 	router.HandleFunc("/set", s.handleSet)
+	router.HandleFunc("/del", s.handleDelete)
 
 	// Configure the HTTP server
 	s.httpServer = &http.Server{
@@ -41,6 +43,23 @@ func NewServer(addr string, cacheManager *cache.Manager) *Server {
 	return s
 }
 
+func (s *Server) Run(ctx context.Context) {
+	go func() {
+		if err := s.Start(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("API server error: %v", err)
+		}
+	}()
+
+	<-ctx.Done() // Wait for shutdown signal
+	log.Println("Shutting down API server...")
+
+	if err := s.httpServer.Shutdown(ctx); err != nil {
+		log.Fatalf("API server shutdown error: %v", err)
+	}
+
+	log.Println("API server shut down cleanly.")
+}
+
 // Start runs the HTTP server
 func (s *Server) Start() error {
 	go s.gracefulShutdown()
@@ -48,7 +67,7 @@ func (s *Server) Start() error {
 }
 
 // Stop initiates a graceful shutdown
-func (s *Server) Stop() {
+func (s *Server) Shutdown() {
 	close(s.shutdown)
 }
 
@@ -134,6 +153,38 @@ func (s *Server) handleSet(w http.ResponseWriter, r *http.Request) {
 
 	writeResponse(w, http.StatusCreated, map[string]interface{}{
 		"message": "Value set successfully",
+		"key":     key,
+		"node":    node.String(),
+	})
+}
+
+// handleSet handles key-value storage
+func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	key := r.URL.Query().Get("key")
+	if key == "" {
+		writeError(w, http.StatusBadRequest, "`key` parameter is required")
+		return
+	}
+
+	node, err := s.cacheManager.GetNodeForKey(key)
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+
+	err = s.cacheManager.DeleteKeyOnNode(node.String(), key)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeResponse(w, http.StatusCreated, map[string]interface{}{
+		"message": "Value deleted successfully",
 		"key":     key,
 		"node":    node.String(),
 	})

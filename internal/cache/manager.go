@@ -140,6 +140,58 @@ func (cm *Manager) SetKeyOnNode(nodeAddr, key string, value []byte) error {
 	}
 }
 
+func (cm *Manager) DeleteKeyOnNode(nodeAddr, key string) error {
+	cm.logger.Printf("DeleteKeyOnNode: %s %s", nodeAddr, key)
+
+	respChan := make(chan error, 1)
+	defer close(respChan)
+
+	subID := fmt.Sprintf("del_resp_%s", generateRandomID(8))
+	var handler communication.MessageHandler
+	handler = func(msg communication.Message) {
+		var resp struct {
+			Error string `json:"error"`
+		}
+
+		if err := json.Unmarshal(msg.Payload, &resp); err != nil {
+			respChan <- err
+		} else if resp.Error != "" {
+			respChan <- errors.New(resp.Error)
+		} else {
+			respChan <- nil
+		}
+
+		cm.pubsub.Unsubscribe(subID, handler)
+	}
+
+	cm.pubsub.Subscribe(subID, handler)
+
+	request := struct {
+		Key     string `json:"key"`
+		ReplyTo string `json:"reply_to"`
+	}{
+		Key:     key,
+		ReplyTo: subID,
+	}
+
+	payload, err := json.Marshal(request)
+	if err != nil {
+		return fmt.Errorf("failed to marshal set request: %w", err)
+	}
+
+	cm.pubsub.PublishSync(fmt.Sprintf("del_%s", nodeAddr), communication.Message{
+		Topic:   fmt.Sprintf("del_%s", nodeAddr),
+		Payload: payload,
+	})
+
+	select {
+	case err := <-respChan:
+		return err
+	case <-time.After(10 * time.Second):
+		return errors.New("delete operation timed out")
+	}
+}
+
 // GetNodeForKey finds the best node for a given key
 func (cm *Manager) GetNodeForKey(key string) (consistent.Node, error) {
 	cm.mu.RLock()

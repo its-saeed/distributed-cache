@@ -104,8 +104,31 @@ func (dn *DataNode) handleSetRequest(msg communication.Message) {
 	})
 }
 
-func (dn *DataNode) startWorkers() {
-	dn.wg.Add(1)
+func (dn *DataNode) handleDeleteRequest(msg communication.Message) {
+	var request struct {
+		Key     string `json:"key"`
+		ReplyTo string `json:"reply_to"`
+	}
+
+	if err := json.Unmarshal(msg.Payload, &request); err != nil {
+		dn.logger.Printf("Error decoding set request: %v", err)
+		return
+	}
+
+	dn.cache.Delete(request.Key)
+
+	response := struct {
+		Error string `json:"error"`
+	}{
+		Error: "",
+	}
+
+	payload, _ := json.Marshal(response)
+	dn.pubsub.PublishSync(request.ReplyTo, communication.Message{
+		Topic:   request.ReplyTo,
+		Payload: payload,
+		Sender:  dn.ID,
+	})
 }
 
 func (dn *DataNode) Shutdown() {
