@@ -97,7 +97,7 @@ func (cm *Manager) onNodeHeartbeat(msg communication.Message) {
 	cm.logger.Printf("Node heartbeat: %s", addr)
 }
 
-func (cm *Manager) SetKeyOnNode(nodeAddr, key string, value []byte) error {
+func (cm *Manager) SetKeyOnNode(nodeAddr, key string, value []byte, ttl int) error {
 	cm.logger.Printf("SetKeyOnNode: %s %s", nodeAddr, key)
 
 	respChan := make(chan error, 1)
@@ -126,10 +126,12 @@ func (cm *Manager) SetKeyOnNode(nodeAddr, key string, value []byte) error {
 	request := struct {
 		Key     string `json:"key"`
 		Value   []byte `json:"value"`
+		Ttl     int    `json:"ttl"`
 		ReplyTo string `json:"reply_to"`
 	}{
 		Key:     key,
 		Value:   value,
+		Ttl:     ttl,
 		ReplyTo: subID,
 	}
 

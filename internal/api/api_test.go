@@ -58,7 +58,7 @@ func TestGetKeyEndpoint(t *testing.T) {
 	node1.Run()
 
 	// Set a key manually
-	cacheManager.SetKeyOnNode(nodeAddr, "testKey", []byte("testValue"))
+	cacheManager.SetKeyOnNode(nodeAddr, "testKey", []byte("testValue"), 1000)
 
 	req := httptest.NewRequest(http.MethodGet, "/get?key=testKey", nil)
 	rec := httptest.NewRecorder()

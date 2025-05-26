@@ -105,6 +105,7 @@ func (dn *DataNode) handleSetRequest(msg communication.Message) {
 	var request struct {
 		Key     string `json:"key"`
 		Value   []byte `json:"value"`
+		Ttl     int    `json:"ttl"`
 		ReplyTo string `json:"reply_to"`
 	}
 
@@ -113,7 +114,7 @@ func (dn *DataNode) handleSetRequest(msg communication.Message) {
 		return
 	}
 
-	dn.cache.Set(request.Key, request.Value)
+	dn.cache.SetWithTtl(request.Key, request.Value, time.Duration(request.Ttl)*time.Second)
 
 	response := struct {
 		Error string `json:"error"`

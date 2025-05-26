@@ -5,17 +5,20 @@ import (
 	"encoding/json"
 	"os"
 	"sync"
+	"time"
 )
 
 type Entry struct {
-	Key   string
-	Value []byte
+	Key       string
+	Value     []byte
+	ExpiresAt time.Time
 }
 
-func NewEntry(key string, value []byte) *Entry {
+func NewEntry(key string, value []byte, ttl time.Duration) *Entry {
 	e := &Entry{
-		Key:   key,
-		Value: value,
+		Key:       key,
+		Value:     value,
+		ExpiresAt: time.Now().Add(ttl),
 	}
 	return e
 }
@@ -48,6 +51,11 @@ func (l *LRUCache) Get(key string) ([]byte, bool) {
 	}
 
 	entry := entryWrapper.Value.(*Entry)
+	if time.Now().After(entry.ExpiresAt) {
+		l.list.Remove(entryWrapper)
+		delete(l.cache, key)
+		return nil, false
+	}
 
 	l.mu.Lock()
 	l.list.MoveToFront(entryWrapper)
@@ -56,7 +64,7 @@ func (l *LRUCache) Get(key string) ([]byte, bool) {
 	return entry.Value, true
 }
 
-func (l *LRUCache) Set(key string, value []byte) {
+func (l *LRUCache) SetWithTtl(key string, value []byte, ttl time.Duration) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -64,11 +72,12 @@ func (l *LRUCache) Set(key string, value []byte) {
 	if elem, ok := l.cache[key]; ok {
 		entry := elem.Value.(*Entry)
 		entry.Value = value
+		entry.ExpiresAt = time.Now().Add(ttl)
 		l.list.MoveToFront(elem)
 		return
 	}
 
-	entry := NewEntry(key, value)
+	entry := NewEntry(key, value, ttl)
 	elem := l.list.PushFront(entry)
 	l.cache[key] = elem
 
@@ -76,6 +85,10 @@ func (l *LRUCache) Set(key string, value []byte) {
 	if l.list.Len() > l.capacity {
 		l.evict()
 	}
+}
+
+func (l *LRUCache) Set(key string, value []byte) {
+	l.SetWithTtl(key, value, time.Duration(100)*time.Hour)
 }
 
 // evict removes the least recently used item
@@ -152,7 +165,9 @@ func (l *LRUCache) LoadFromFile(filename string) error {
 
 	for i := len(persist.Entries) - 1; i >= 0; i-- {
 		e := persist.Entries[i]
-		l.Set(e.Key, e.Value)
+		if time.Now().Before(e.ExpiresAt) {
+			l.SetWithTtl(e.Key, e.Value, time.Until(e.ExpiresAt))
+		}
 	}
 	return nil
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/its-saeed/distributed-cache/internal/cache"
@@ -134,8 +135,15 @@ func (s *Server) handleSet(w http.ResponseWriter, r *http.Request) {
 
 	key := r.URL.Query().Get("key")
 	value := r.URL.Query().Get("value")
+	ttl_str := r.URL.Query().Get("ttl")
 	if key == "" || value == "" {
 		writeError(w, http.StatusBadRequest, "Both 'key' and 'value' parameters are required")
+		return
+	}
+
+	ttl, err := strconv.Atoi(ttl_str)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "ttl is not a number")
 		return
 	}
 
@@ -145,7 +153,7 @@ func (s *Server) handleSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = s.cacheManager.SetKeyOnNode(node.String(), key, []byte(value))
+	err = s.cacheManager.SetKeyOnNode(node.String(), key, []byte(value), ttl)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
