@@ -2,18 +2,18 @@ package consistent
 
 import (
 	"errors"
-	"hash/fnv"
+	"fmt"
 	"slices"
 	"sort"
 	"sync"
+
+	"github.com/spaolacci/murmur3"
 )
 
-type FNVHash struct{}
+type MurmurHash struct{}
 
-func (h FNVHash) Sum64(key string) uint64 {
-	hasher := fnv.New64a()
-	hasher.Write([]byte(key))
-	return hasher.Sum64()
+func (h MurmurHash) Sum64(key string) uint64 {
+	return murmur3.Sum64([]byte(key))
 }
 
 var (
@@ -24,7 +24,7 @@ var (
 
 // HashRing manages nodes using consistent hashing
 type HashRing struct {
-	hashFunc FNVHash
+	hashFunc MurmurHash
 	nodes    map[uint64]Node // Hash -> Node mapping
 	sorted   []uint64        // Sorted hashes
 	mu       sync.RWMutex
@@ -32,22 +32,27 @@ type HashRing struct {
 
 func NewHashRing() *HashRing {
 	return &HashRing{
-		hashFunc: FNVHash{},
+		hashFunc: MurmurHash{},
 		nodes:    make(map[uint64]Node),
 	}
 }
 
-func (hr *HashRing) AddNode(node Node) error {
+func (hr *HashRing) AddNode(node Node, numVirtualNodes int) error {
 	hr.mu.Lock()
 	defer hr.mu.Unlock()
 
-	hash := hr.hashFunc.Sum64(node.String())
-	if _, exists := hr.nodes[hash]; exists {
-		return ErrNodeExists
-	}
+	for i := range numVirtualNodes {
+		virtualKey := fmt.Sprintf("%s#%d", node.String(), i)
+		hash := hr.hashFunc.Sum64(virtualKey)
+		if _, exists := hr.nodes[hash]; exists {
+			return ErrNodeExists
+		}
 
-	hr.nodes[hash] = node
-	hr.sorted = append(hr.sorted, hash)
+		hr.nodes[hash] = node
+
+		idx := sort.Search(len(hr.sorted), func(i int) bool { return hr.sorted[i] >= hash })
+		hr.sorted = append(hr.sorted[:idx], append([]uint64{hash}, hr.sorted[idx:]...)...)
+	}
 
 	// Keep hashes sorted for efficient lookup
 	slices.Sort(hr.sorted)
@@ -86,6 +91,7 @@ func (hr *HashRing) GetNode(key string) (Node, error) {
 	}
 
 	hash := hr.hashFunc.Sum64(key)
+	fmt.Println("GetNode", hash, key)
 
 	// Find the closest node using binary search
 	idx := sort.Search(len(hr.sorted), func(i int) bool { return hr.sorted[i] >= hash })

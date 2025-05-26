@@ -54,7 +54,7 @@ func (cm *Manager) onNodeRegister(msg communication.Message) {
 	}
 
 	node := &simpleNode{addr: addr}
-	if err := cm.hashRing.AddNode(node); err != nil {
+	if err := cm.hashRing.AddNode(node, 100); err != nil {
 		cm.logger.Printf("Failed to add node to hash ring: %v", err)
 		return
 	}

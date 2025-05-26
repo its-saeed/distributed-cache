@@ -24,7 +24,7 @@ func TestAddNode(t *testing.T) {
 	ring := NewHashRing()
 	node := &MockNode{ID: "node1"}
 
-	err := ring.AddNode(node)
+	err := ring.AddNode(node, 1)
 	if err != nil {
 		t.Errorf("Error adding node: %v", err)
 	}
@@ -38,8 +38,8 @@ func TestDuplicateNode(t *testing.T) {
 	ring := NewHashRing()
 	node := &MockNode{ID: "node1"}
 
-	_ = ring.AddNode(node)
-	err := ring.AddNode(node)
+	_ = ring.AddNode(node, 1)
+	err := ring.AddNode(node, 1)
 
 	if err != ErrNodeExists {
 		t.Errorf("Expected duplicate node error, got: %v", err)
@@ -50,7 +50,7 @@ func TestRemoveNode(t *testing.T) {
 	ring := NewHashRing()
 	node := &MockNode{ID: "node1"}
 
-	_ = ring.AddNode(node)
+	_ = ring.AddNode(node, 1)
 	err := ring.RemoveNode(node)
 	if err != nil {
 		t.Errorf("Error removing node: %v", err)
@@ -66,8 +66,8 @@ func TestGetNode(t *testing.T) {
 	node1 := &MockNode{ID: "node1"}
 	node2 := &MockNode{ID: "node2"}
 
-	_ = ring.AddNode(node1)
-	_ = ring.AddNode(node2)
+	_ = ring.AddNode(node1, 1)
+	_ = ring.AddNode(node2, 1)
 
 	key := "testKey"
 	node, err := ring.GetNode(key)
