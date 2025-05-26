@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/its-saeed/distributed-cache/internal/cache"
 	"github.com/its-saeed/distributed-cache/internal/communication"
@@ -20,7 +21,7 @@ type DataNode struct {
 	dataFile string
 }
 
-func NewDataNode(id string, capacity int, pubsub *communication.PubSub) *DataNode {
+func NewDataNode(id string, capacity int, pubsub *communication.PubSub, persist bool, dataFile string) *DataNode {
 	dn := &DataNode{
 		ID:       id,
 		pubsub:   pubsub,
@@ -42,7 +43,25 @@ func NewDataNode(id string, capacity int, pubsub *communication.PubSub) *DataNod
 }
 
 func (dn *DataNode) Run() {
-	dn.startWorkers()
+	go dn.startHeartbeat()
+}
+
+func (dn *DataNode) startHeartbeat() {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	dn.wg.Add(1)
+	defer dn.wg.Done()
+	for {
+		select {
+		case <-dn.shutdown:
+			dn.logger.Println("Stopping heartbeat...")
+			return
+		case <-ticker.C:
+			payload, _ := json.Marshal(dn.ID)
+			dn.pubsub.PublishSync("node_heartbeat", communication.Message{Payload: payload})
+		}
+	}
 }
 
 func (dn *DataNode) registerHandlers() {

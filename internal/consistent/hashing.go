@@ -50,7 +50,7 @@ func (hr *HashRing) AddNode(node Node) error {
 	hr.sorted = append(hr.sorted, hash)
 
 	// Keep hashes sorted for efficient lookup
-	sort.Slice(hr.sorted, func(i, j int) bool { return hr.sorted[i] < hr.sorted[j] })
+	slices.Sort(hr.sorted)
 
 	return nil
 }

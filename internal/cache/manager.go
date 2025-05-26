@@ -34,6 +34,7 @@ func NewCacheManager(pubsub *communication.PubSub) *Manager {
 
 	pubsub.Subscribe("node_register", cm.onNodeRegister)
 	pubsub.Subscribe("node_unregister", cm.onNodeUnregister)
+	pubsub.Subscribe("node_heartbeat", cm.onNodeHeartbeat)
 
 	return cm
 }
@@ -84,6 +85,16 @@ func (cm *Manager) onNodeUnregister(msg communication.Message) {
 
 	delete(cm.nodeAddrs, addr)
 	cm.logger.Printf("Node unregistered: %s (Remaining nodes: %d)", addr, len(cm.nodeAddrs))
+}
+
+func (cm *Manager) onNodeHeartbeat(msg communication.Message) {
+	var addr string
+	if err := json.Unmarshal(msg.Payload, &addr); err != nil {
+		cm.logger.Printf("Failed to unmarshal node heartbeat: %v", err)
+		return
+	}
+
+	cm.logger.Printf("Node heartbeat: %s", addr)
 }
 
 func (cm *Manager) SetKeyOnNode(nodeAddr, key string, value []byte) error {
